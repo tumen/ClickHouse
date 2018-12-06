@@ -30,6 +30,7 @@
 #include <Storages/StorageMemory.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Core/ExternalTable.h>
+#include <DataTypes/DataTypeLowCardinality.h>
 
 #include "TCPHandler.h"
 
@@ -361,6 +362,17 @@ void TCPHandler::processInsertQuery(const Settings & global_settings)
 
     /// Send block to the client - table structure.
     Block block = state.io.out->getHeader();
+
+    /// Support insert from old clients without low cardinality type.
+    if (client_revision && client_revision < DBMS_MIN_REVISION_WITH_LOW_CARDINALITY_TYPE)
+    {
+        for (auto & col : block)
+        {
+            col.type = recursiveRemoveLowCardinality(col.type);
+            col.column = recursiveRemoveLowCardinality(col.column);
+        }
+    }
+
     sendData(block);
 
     readData(global_settings);
